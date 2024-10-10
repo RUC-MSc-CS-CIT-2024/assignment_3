@@ -12,24 +12,22 @@ Console.WriteLine("Server started");
 
 while (true) {    
     Console.WriteLine("Waiting for connection...");
-    // handle asyncously
+    // Handle request asyncously
     HandleConnection(listener.AcceptTcpClient());
 }
 
 async void HandleConnection(TcpClient client) {
+    Console.WriteLine($"Client '{client.Client.RemoteEndPoint}' connected");
     try {
-        Request req = await client.ReadRequestAsync();
-
+        Request req = await ReadRequestAsync(client);
         Response resp = HandleRequest(req);
-
-        await client.SendResponseAsync(resp);
-
+        await SendResponseAsync(client, resp);
     } catch (Exception e) {
         if (e.Message.Contains("An existing connection was forcibly closed by the remote host.."))
             Console.WriteLine($"Client '{client.Client.RemoteEndPoint}' disconnected");
         else {
             Console.WriteLine($"error: {e.Message}");
-            await client.SendResponseAsync(new Response(e.Message));
+            await SendResponseAsync(client, new Response(e.Message));
         }            
     } 
     finally {
@@ -40,30 +38,20 @@ async void HandleConnection(TcpClient client) {
 Response HandleRequest(Request request) {
     EnsureValidRequest(request);
 
+    // Handle echo request
     if(request.Method == "echo")
         return new Response($"1 Ok", request.Body);
 
-    string pathPattern = @"^\/api\/categories(\/(?<CategoryId>\d+))?$";
-    Match match = Regex.Match(request.Path, pathPattern);
-
-    if (!match.Success)
+    // Parse the path and extract the category id if present
+    if(!TryParsePathId(request, out int? categoryId))
         return ResponseFactory.CreateResponse(StatusCode.BadRequest);
 
-    Group catIdGroup = match.Groups["CategoryId"];
-    if (request.IsIdOnPathRequired() && !catIdGroup.Success)
-        return ResponseFactory.CreateResponse(StatusCode.BadRequest);
-    else if (request.IsIdOnPathNotAllowed() && catIdGroup.Success)
-        return ResponseFactory.CreateResponse(StatusCode.BadRequest);
-
+    // Deserialize the body if required
     Category? body = request.IsBodyRequired()
         ? JsonSerializer.Deserialize<Category>(request.Body!, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase })
         : null;
-    
-    int? categoryId = 
-        catIdGroup.Success 
-        ? int.Parse(catIdGroup.Value) 
-        : null;
 
+    // Handle the request
     switch (request.Method) {
         case "read":
             if (categoryId == null)
@@ -136,41 +124,58 @@ bool IsValidJson(string? strInput)
         return false;
     }
 
-static class Util {
-    public static async Task SendResponseAsync(this TcpClient client, Response response)
-    {
-        string jsonBody = JsonSerializer.Serialize(response, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
-        Console.WriteLine($"info: response = {jsonBody}");
-        byte[] msg = Encoding.UTF8.GetBytes(jsonBody);
-        await client.GetStream().WriteAsync(msg, 0, msg.Length);
-    }
+bool TryParsePathId(Request request, out int? categoryId) {
+    string pathPattern = @"^\/api\/categories(\/(?<CategoryId>\d+))?$";
+    Match match = Regex.Match(request.Path, pathPattern);
+    Group catIdGroup = match.Groups["CategoryId"];
+    
+    categoryId = catIdGroup.Success 
+        ? int.Parse(catIdGroup.Value) 
+        : null;
 
-    public static async Task<Request> ReadRequestAsync(this TcpClient client)
-    {
-        NetworkStream stream = client.GetStream();
-        //strm.ReadTimeout = 250;
-        byte[] resp = new byte[2048];
-        using MemoryStream memStream = new ();
-        int bytesread = 0;
-        do
-        {
-            bytesread = await stream.ReadAsync(resp, 0, resp.Length);
-            await memStream.WriteAsync(resp, 0, bytesread);
+    if (!match.Success)
+        return false;
+    if (request.IsIdOnPathNotAllowed() && catIdGroup.Success)
+        return false;
+    if (request.IsIdOnPathRequired() && !catIdGroup.Success)
+        return false;
 
-        } while (bytesread == 2048);
-        
-        var requestData = Encoding.UTF8.GetString(memStream.ToArray());
-        Console.WriteLine($"info: raw request = {requestData}");
-        // using StreamReader reader = new StreamReader(client.GetStream());
-        // string responseData = await reader.ReadToEndAsync();
-        Request? result = JsonSerializer.Deserialize<Request>(requestData, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
-
-        if (result == null)
-            throw new Exception("Failed to deserialize request");
-        
-        return result;
-    }
+    return true;
 }
+
+async Task SendResponseAsync(TcpClient client, Response response)
+{
+    string jsonBody = JsonSerializer.Serialize(response, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+    Console.WriteLine($"info: response = {jsonBody}");
+    byte[] msg = Encoding.UTF8.GetBytes(jsonBody);
+    await client.GetStream().WriteAsync(msg, 0, msg.Length);
+}
+
+async Task<Request> ReadRequestAsync(TcpClient client)
+{
+    NetworkStream stream = client.GetStream();
+    stream.ReadTimeout = 250;
+    byte[] resp = new byte[2048];
+    using MemoryStream memStream = new ();
+    int bytesread = 0;
+    do
+    {
+        bytesread = await stream.ReadAsync(resp, 0, resp.Length);
+        await memStream.WriteAsync(resp, 0, bytesread);
+
+    } while (bytesread == 2048);
+    
+    var requestData = Encoding.UTF8.GetString(memStream.ToArray());
+    Console.WriteLine($"info: raw request = {requestData}");
+
+    Request? result = JsonSerializer.Deserialize<Request>(requestData, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+
+    if (result == null)
+        throw new Exception("Failed to deserialize request");
+    
+    return result;
+}
+
 
 record Request(string Method, string Path, string Date, string? Body = null) {
     public bool IsValidMethod() 
