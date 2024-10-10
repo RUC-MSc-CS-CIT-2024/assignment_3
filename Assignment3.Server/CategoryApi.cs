@@ -14,7 +14,9 @@ static class CategoryApi
         => _data.FirstOrDefault(c => c.Cid == cid);
 
     public static List<Category> GetCategories()
-        => _data;
+        => _data
+            .OrderBy(c => c.Cid)
+            .ToList();
     
     public static Category CreateCategory(Category category)
     {
