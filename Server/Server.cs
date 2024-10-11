@@ -37,7 +37,7 @@ public class Server
             var msg = ReadFromStream(stream);
             Console.WriteLine("Message from client: " + msg);
 
-            // Attempt to deserialize the request
+            // Deserialize the request
             var request = FromJson(msg);
 
             // Check for missing Method first
@@ -48,7 +48,7 @@ public class Server
                 return;
             }
 
-            // Correct array initialization using curly braces
+            // Correct methodes for this protocol
             string[] validMethods = { "create", "read", "update", "delete", "echo" };
 
             // Check if the method is valid
@@ -109,7 +109,7 @@ public class Server
                 return;
             }
 
-            // Define valid paths for read and create methods
+            // Define valid paths
             string[] validPaths = { "/api/categories", "/api/categories/" };
 
             // Handle read and create request validation
@@ -130,7 +130,7 @@ public class Server
                 var parts = request.Path.Split('/');
                 if (parts.Length > 3) // If there is an ID present
                 {
-                    var response = new Response { Status = "4 Bad Request" }; // Invalid request for create
+                    var response = new Response { Status = "4 Bad Request" };
                     WriteToStream(stream, ToJson(response));
                     return;
                 }
@@ -227,6 +227,7 @@ public class Server
             // Handle delete method
             if (request.Method == "delete")
             {
+                // Ensure the path is valid and ends with a valid category ID
                 if (!request.Path.Contains("/api/categories/") || !request.Path.Split('/').Last().All(char.IsDigit))
                 {
                     var response = new Response { Status = "4 Bad Request" };
@@ -234,8 +235,37 @@ public class Server
                     return;
                 }
 
-                // Additional logic for delete can be added here
+                // Extract category ID from path
+                var categoryIdStr = request.Path.Split('/').Last();
+                if (!int.TryParse(categoryIdStr, out int categoryId))
+                {
+                    var response = new Response { Status = "4 Bad Request", Body = "Invalid category ID" };
+                    WriteToStream(stream, ToJson(response));
+                    return;
+                }
+
+                // Find the category in the list
+                var category = categories.FirstOrDefault(c => c.cid == categoryId);
+                if (category == null)
+                {
+                    var response = new Response
+                        { Status = "5 Not Found", Body = $"Category with ID {categoryId} not found" };
+                    WriteToStream(stream, ToJson(response));
+                    return;
+                }
+
+                // Remove the category
+                categories.Remove(category);
+
+                // Return success response
+                var deleteResponse = new Response
+                {
+                    Status = "1 ok", // Make sure the status is exactly "1 ok"
+                };
+                WriteToStream(stream, ToJson(deleteResponse));
+                return;
             }
+
 
             // // Check for valid category ID (if applicable)
             // if (request.Path.StartsWith("/api/categories/"))
@@ -255,83 +285,82 @@ public class Server
 
 
             // Handle update logic
-           // Handle update logic
-if (request.Method == "update" && request.Path.StartsWith("/api/categories/"))
-{
-    // Extract the ID from the path
-    var parts = request.Path.Split('/');
-    if (parts.Length < 3 || !int.TryParse(parts[^1], out int categoryId))
-    {
-        var response = new Response { Status = "5 not found", Body = "Invalid category ID" };
-        WriteToStream(stream, ToJson(response));
-        return;
-    }
-
-    // Parse the request body as JSON to extract update info
-    using (JsonDocument doc = JsonDocument.Parse(request.Body))
-    {
-        if (doc.RootElement.TryGetProperty("cid", out JsonElement cidElement) &&
-            cidElement.TryGetInt32(out int bodyCid) &&
-            doc.RootElement.TryGetProperty("name", out JsonElement nameElement))
-        {
-            string updatedName = nameElement.GetString();
-
-            // Check if the cid from the body matches the categoryId from the path
-            if (bodyCid != categoryId)
+            // Handle update logic
+            if (request.Method == "update" && request.Path.StartsWith("/api/categories/"))
             {
-                var response = new Response { Status = "5 not found", Body = "Category ID mismatch" };
-                WriteToStream(stream, ToJson(response));
-                return;
-            }
-
-            // Simulate categories as an in-memory list (this would normally be a database)
-            var categories = new List<Category>
-            {
-                new Category { cid = 1, Name = "Beverages" },
-                new Category { cid = 2, Name = "Condiments" },
-                new Category { cid = 3, Name = "Confections" }
-            };
-
-            // Find the category by ID
-            var category = categories.FirstOrDefault(c => c.cid == categoryId);
-
-            if (category != null)
-            {
-                // Update the category name
-                category.Name = updatedName; // Update with the new name from the request
-
-                // Respond with the updated category
-                var response = new Response
+                // Extract the ID from the path
+                var parts = request.Path.Split('/');
+                if (parts.Length < 3 || !int.TryParse(parts[^1], out int categoryId))
                 {
-                    Status = "3 updated",
-                    Body = ToJson(new
+                    var response = new Response { Status = "5 not found", Body = "Invalid category ID" };
+                    WriteToStream(stream, ToJson(response));
+                    return;
+                }
+
+                // Parse the request body as JSON to extract update info
+                using (JsonDocument doc = JsonDocument.Parse(request.Body))
+                {
+                    if (doc.RootElement.TryGetProperty("cid", out JsonElement cidElement) &&
+                        cidElement.TryGetInt32(out int bodyCid) &&
+                        doc.RootElement.TryGetProperty("name", out JsonElement nameElement))
                     {
-                        cid = category.cid,            // Keep the cid as is
-                        name = updatedName              // Use the updated name directly from the request
-                    })
-                };
-                WriteToStream(stream, ToJson(response));
-            }
-            else
-            {
-                // Handle case where category is not found
-                var errorResponse = new Response
-                {
-                    Status = "5 not found",
-                    Body = $"Category with ID {categoryId} not found"
-                };
-                WriteToStream(stream, ToJson(errorResponse));
-            }
-        }
-        else
-        {
-            // If either "cid" or "name" is missing in the request body
-            var response = new Response { Status = "4 Bad Request", Body = "Invalid request body" };
-            WriteToStream(stream, ToJson(response));
-        }
-    }
-}
+                        string updatedName = nameElement.GetString();
 
+                        // Check if the cid from the body matches the categoryId from the path
+                        if (bodyCid != categoryId)
+                        {
+                            var response = new Response { Status = "5 not found", Body = "Category ID mismatch" };
+                            WriteToStream(stream, ToJson(response));
+                            return;
+                        }
+
+                        // Simulate categories as an in-memory list (this would normally be a database)
+                        var categories = new List<Category>
+                        {
+                            new Category { cid = 1, Name = "Beverages" },
+                            new Category { cid = 2, Name = "Condiments" },
+                            new Category { cid = 3, Name = "Confections" }
+                        };
+
+                        // Find the category by ID
+                        var category = categories.FirstOrDefault(c => c.cid == categoryId);
+
+                        if (category != null)
+                        {
+                            // Update the category name
+                            category.Name = updatedName; // Update with the new name from the request
+
+                            // Respond with the updated category
+                            var response = new Response
+                            {
+                                Status = "3 updated",
+                                Body = ToJson(new
+                                {
+                                    cid = category.cid, // Keep the cid as is
+                                    name = updatedName // Use the updated name directly from the request
+                                })
+                            };
+                            WriteToStream(stream, ToJson(response));
+                        }
+                        else
+                        {
+                            // Handle case where category is not found
+                            var errorResponse = new Response
+                            {
+                                Status = "5 not found",
+                                Body = $"Category with ID {categoryId} not found"
+                            };
+                            WriteToStream(stream, ToJson(errorResponse));
+                        }
+                    }
+                    else
+                    {
+                        // If either "cid" or "name" is missing in the request body
+                        var response = new Response { Status = "4 Bad Request", Body = "Invalid request body" };
+                        WriteToStream(stream, ToJson(response));
+                    }
+                }
+            }
         }
 
         catch
@@ -409,4 +438,11 @@ if (request.Method == "update" && request.Path.StartsWith("/api/categories/"))
         return JsonSerializer.Deserialize<Request>(element,
             new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
     }
+
+    private List<Category> categories = new List<Category>
+    {
+        new Category { cid = 1, Name = "Beverages" },
+        new Category { cid = 2, Name = "Condiments" },
+        new Category { cid = 3, Name = "Confections" }
+    };
 }

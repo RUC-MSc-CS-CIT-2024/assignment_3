@@ -567,7 +567,7 @@ namespace Assignment3TestSuite
 
             Assert.Contains("1 ok", response.Status.ToLower());
         }
-#if false
+
         [Fact]
         public void Request_DeleteCategoryWithInvalidId_StatusNotFound()
         {
@@ -585,7 +585,7 @@ namespace Assignment3TestSuite
             Assert.Contains("5 not found", response.Status.ToLower());
         }
 
-        #endif
+     
 
 
 
