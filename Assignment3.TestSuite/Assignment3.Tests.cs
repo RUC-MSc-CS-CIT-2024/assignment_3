@@ -14,7 +14,6 @@ namespace Assignment3TestSuite
     public class Response
     {
         public string Status { get; set; }
-        
         public string Body { get; set; }
     }
 
@@ -198,7 +197,6 @@ namespace Assignment3TestSuite
 
         }
 
-       
         //////////////////////////////////////////////////////////
         /// 
         /// Testing API 
@@ -226,7 +224,6 @@ namespace Assignment3TestSuite
 
             Assert.Equal(expectedResponse.ToJson().ToLower(), response.ToJson().ToLower());
         }
-        
 
         [Fact]
         public void Constraint_RequestWithInvalidPathId_StatusBadRequest()
@@ -247,7 +244,6 @@ namespace Assignment3TestSuite
 
             Assert.Equal(expectedResponse.ToJson().ToLower(), response.ToJson().ToLower());
         }
-
 
         [Fact]
         public void Constraint_CreateWithPathId_StatusBadRequest()
@@ -270,7 +266,6 @@ namespace Assignment3TestSuite
             Assert.Equal(expectedResponse.ToJson().ToLower(), response.ToJson().ToLower());
         }
 
-
         [Fact]
         public void Constraint_UpdateWithOutPathId_StatusBadRequest()
         {
@@ -291,8 +286,6 @@ namespace Assignment3TestSuite
 
             Assert.Equal(expectedResponse.ToJson().ToLower(), response.ToJson().ToLower());
         }
-        
-
 
         [Fact]
         public void Constraint_DeleteWithOutPathId_StatusBadRequest()
@@ -313,6 +306,7 @@ namespace Assignment3TestSuite
 
             Assert.Equal(expectedResponse.ToJson().ToLower(), response.ToJson().ToLower());
         }
+
 
 
         /* Read tests */
@@ -347,7 +341,7 @@ namespace Assignment3TestSuite
 
             Assert.Equal(expectedResponse.ToJson(), response.ToJson());
         }
-        
+
         [Fact]
         public void Request_ReadCategoryWithValidId_StatusOkAndCategoryInBody()
         {
@@ -372,7 +366,6 @@ namespace Assignment3TestSuite
             Assert.Equal(expectedResponse.ToJson(), response.ToJson());
         }
 
-       
         [Fact]
         public void Request_ReadCategoryWithInvalidId_StatusNotFound()
         {
@@ -390,7 +383,6 @@ namespace Assignment3TestSuite
 
             Assert.Contains("5 not found", response.Status.ToLower());
         }
-
 
 
         /* Update tests  */
@@ -429,7 +421,7 @@ namespace Assignment3TestSuite
             client.SendRequest(resetRequest.ToJson());
             client.ReadResponse();
         }
-        
+
         [Fact]
         public void Request_UpdateCategotyValidIdAndBody_ChangedCategoryName()
         {
@@ -475,7 +467,6 @@ namespace Assignment3TestSuite
             client.ReadResponse();
         }
 
-
         [Fact]
         public void Request_UpdateCategotyInvalidId_NotFound()
         {
@@ -494,7 +485,6 @@ namespace Assignment3TestSuite
 
             Assert.Contains("5 not found", response.Status.ToLower());
         }
-
 
 
         /* Create Tests  */
@@ -533,7 +523,6 @@ namespace Assignment3TestSuite
             client.SendRequest(resetRequest.ToJson());
             client.ReadResponse();
         }
-
 
 
         /* Delete Tests  */
@@ -584,8 +573,6 @@ namespace Assignment3TestSuite
 
             Assert.Contains("5 not found", response.Status.ToLower());
         }
-
-     
 
 
 
