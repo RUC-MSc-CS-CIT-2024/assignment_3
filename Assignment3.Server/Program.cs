@@ -3,7 +3,6 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
-using System.Text.RegularExpressions;
 using Assignment3.Server;
 
 TcpListener listener = new TcpListener(IPAddress.Loopback, 5000);
@@ -36,14 +35,14 @@ async void HandleConnection(TcpClient client) {
 }
 
 Response HandleRequest(Request request) {
-    EnsureValidRequest(request);
+    request.EnsureValidRequest();
 
     // Handle echo request
     if(request.Method == "echo")
         return new Response($"1 Ok", request.Body);
 
     // Parse the path and extract the category id if present
-    if(!TryParsePathId(request, out int? categoryId))
+    if(!Request.TryParsePathId(request, out int? categoryId))
         return ResponseFactory.CreateResponse(StatusCode.BadRequest);
 
     // Deserialize the body if required
@@ -58,9 +57,9 @@ Response HandleRequest(Request request) {
                 return ResponseFactory.CreateResponse(StatusCode.Ok, CategoryApi.GetCategories());
             
             Category? cat = CategoryApi.GetCategory(categoryId!.Value);
-            return cat == null
-                ? ResponseFactory.CreateResponse(StatusCode.NotFound)
-                : ResponseFactory.CreateResponse(StatusCode.Ok, cat);
+            return cat != null
+                ? ResponseFactory.CreateResponse(StatusCode.Ok, cat)
+                : ResponseFactory.CreateResponse(StatusCode.NotFound);
         case "create":
             Category newCat = CategoryApi.CreateCategory(body!);
             return ResponseFactory.CreateResponse(StatusCode.Created, newCat);
@@ -75,72 +74,6 @@ Response HandleRequest(Request request) {
         default:
             return ResponseFactory.CreateResponse(StatusCode.BadRequest);
     }
-}
-
-void EnsureValidRequest(Request request) {
-    string errorMsg = "";
-    if (string.IsNullOrEmpty(request.Method))
-        errorMsg += "Missing method ";
-    else if (!request.IsValidMethod())
-        errorMsg += "Illegal method";
-    if (request.Method != "echo" && string.IsNullOrEmpty(request.Path))
-        errorMsg += "Missing resource ";
-
-    if (string.IsNullOrEmpty(request.Date))
-            errorMsg += "Missing date ";
-    else if (!int.TryParse(request.Date, out int date))
-        errorMsg += "Illegal date ";
-    else if (date < 0 || date > DateTimeOffset.Now.ToUnixTimeSeconds())
-        errorMsg += "Illegal date ";
-
-    if (request.IsBodyRequired() && string.IsNullOrEmpty(request.Body))
-        errorMsg += "Missing body ";
-    else if (request.Method == "update" && !IsValidJson(request.Body))
-        errorMsg += "Illegal body ";
-
-    if (errorMsg != "")
-        throw new Exception(errorMsg.TrimEnd());
-    
-    Console.WriteLine("info: Valid request");
-}
-
-bool IsValidJson(string? strInput)
-    {
-        if (string.IsNullOrWhiteSpace(strInput)) return false;
-        strInput = strInput.Trim();
-        if ((strInput.StartsWith("{") && strInput.EndsWith("}")) // For object
-            || (strInput.StartsWith("[") && strInput.EndsWith("]")))   // For array
-        {
-            try
-            {
-                JsonDocument.Parse(strInput);
-                return true;
-            }
-            catch (JsonException) // Not valid JSON
-            {
-                return false;
-            }
-        }
-        return false;
-    }
-
-bool TryParsePathId(Request request, out int? categoryId) {
-    string pathPattern = @"^\/api\/categories(\/(?<CategoryId>\d+))?$";
-    Match match = Regex.Match(request.Path, pathPattern);
-    Group catIdGroup = match.Groups["CategoryId"];
-    
-    categoryId = catIdGroup.Success 
-        ? int.Parse(catIdGroup.Value) 
-        : null;
-
-    if (!match.Success)
-        return false;
-    if (request.IsIdOnPathNotAllowed() && catIdGroup.Success)
-        return false;
-    if (request.IsIdOnPathRequired() && !catIdGroup.Success)
-        return false;
-
-    return true;
 }
 
 async Task SendResponseAsync(TcpClient client, Response response)
@@ -174,55 +107,4 @@ async Task<Request> ReadRequestAsync(TcpClient client)
         throw new Exception("Failed to deserialize request");
     
     return result;
-}
-
-
-record Request(string Method, string Path, string Date, string? Body = null) {
-    public bool IsValidMethod() 
-        => Method == "create" 
-        || Method == "read" 
-        || Method == "update" 
-        || Method == "delete" 
-        || Method == "echo";
-
-    public bool IsBodyRequired()
-        => Method == "create" 
-        || Method == "update" 
-        || Method == "echo";
-    
-    public bool IsIdOnPathRequired()
-        => Method == "update"
-        || Method == "delete";
-    
-    public bool IsIdOnPathNotAllowed()
-        => Method == "create";
-}
-public record Response(string Status, string? Body = null);
-public enum StatusCode {
-    Ok = 1,
-    Created = 2,
-    Updated = 3,
-    BadRequest = 4,
-    NotFound = 5,
-    Error = 6
-}
-public static class ResponseFactory {
-
-    public static Response CreateResponse(StatusCode statusCode) {
-        string status = statusCode switch {
-            StatusCode.Ok => "1 Ok",
-            StatusCode.Created => "2 Created",
-            StatusCode.Updated => "3 Updated",
-            StatusCode.BadRequest => "4 Bad Request",
-            StatusCode.NotFound => "5 Not Found",
-            StatusCode.Error => "6 Error",
-            _ => throw new NotImplementedException()
-        };
-        return new Response(status);
-    }
-    public static Response CreateResponse<T>(StatusCode statusCode, T body) {
-        
-        return CreateResponse(statusCode) 
-            with { Body = JsonSerializer.Serialize(body, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }) };
-    }
 }

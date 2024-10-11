@@ -1,7 +1,5 @@
 namespace Assignment3.Server;
 
-record Category(int Cid, string Name);
-
 static class CategoryApi
 {
     private static List<Category> _data = new() {
